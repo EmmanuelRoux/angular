@@ -14,6 +14,9 @@ import {
   ViewChild,
   WritableSignal,
   signal,
+  model,
+  isWritableSignal,
+  isSignal,
 } from '@angular/core';
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {Router, RouterOutlet, ɵafterNextNavigation as afterNextNavigation} from '../../index';
@@ -23,19 +26,28 @@ export class RootFixtureService {
   private fixture?: ComponentFixture<RootCmp>;
   private harness?: RouterTestingHarness;
 
-  createHarness(): RouterTestingHarness {
+  createHarness(routerOutletData?: (() => unknown) | WritableSignal<unknown>): RouterTestingHarness {
     if (this.harness) {
       throw new Error('Only one harness should be created per test.');
     }
-    this.harness = new RouterTestingHarness(this.getRootFixture());
+    this.harness = new RouterTestingHarness(this.getRootFixture(routerOutletData));
     return this.harness;
   }
 
-  private getRootFixture(): ComponentFixture<RootCmp> {
+  private getRootFixture(routerOutletData?: (() => unknown) | WritableSignal<unknown>): ComponentFixture<RootCmp> {
     if (this.fixture !== undefined) {
       return this.fixture;
     }
-    this.fixture = TestBed.createComponent(RootCmp);
+
+    const bindings: Binding[] = [];
+
+    if (isWritableSignal(routerOutletData)) {
+        bindings.push(twoWayBinding("routerOutletData", routerOutletData));
+    } else if (routerOutletData) {
+        bindings.push(inputBinding("routerOutletData", routerOutletData));
+    }
+
+    this.fixture = TestBed.createComponent(RootCmp, { bindings });
     this.fixture.detectChanges();
     return this.fixture;
   }
@@ -47,7 +59,11 @@ export class RootFixtureService {
 })
 export class RootCmp {
   @ViewChild(RouterOutlet) outlet?: RouterOutlet;
-  readonly routerOutletData = signal<unknown>(undefined);
+  readonly routerOutletData = model<unknown>(undefined);
+}
+
+export interface RouterTestingHarnessOptions {
+  routerOutletData?: (() => unknown) | WritableSignal<unknown>;
 }
 
 /**
@@ -68,8 +84,8 @@ export class RouterTestingHarness {
    *
    * @param initialUrl The target of navigation to trigger before returning the harness.
    */
-  static async create(initialUrl?: string): Promise<RouterTestingHarness> {
-    const harness = TestBed.inject(RootFixtureService).createHarness();
+  static async create(initialUrl?: string, { routerOutletData }: RouterTestingHarnessOptions = {}): Promise<RouterTestingHarness> {
+    const harness = TestBed.inject(RootFixtureService).createHarness(routerOutletData);
     if (initialUrl !== undefined) {
       await harness.navigateByUrl(initialUrl);
     }
